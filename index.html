@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SourceHub - Your Gateway to Knowledge Sharing</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
     <script type="module">
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+        import { getDatabase, ref, set, onValue, update, push } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
         // Your web app's Firebase configuration
@@ -35,21 +36,118 @@
             const postsRef = ref(database, 'posts');
             onValue(postsRef, (snapshot) => {
                 if (snapshot.exists()) {
+                    const posts = [];
                     snapshot.forEach((childSnapshot) => {
-                        const post = childSnapshot.val();
-                        postsDiv.innerHTML += `
-                            <div class="post">
+                        posts.push({ id: childSnapshot.key, ...childSnapshot.val() });
+                    });
+                    
+                    // Sort posts by timestamp (newest first)
+                    posts.sort((a, b) => b.timestamp - a.timestamp);
+                    
+                    posts.forEach((post) => {
+                        const postElement = document.createElement('div');
+                        postElement.className = 'post';
+                        postElement.innerHTML = `
+                            <div class="post-header">
                                 <h3>${post.title}</h3>
-                                <p>${post.content}</p>
-                                ${post.fileURL ? `<a href="${post.fileURL}" target="_blank">View Uploaded File</a>` : ''}
+                                <button class="copy-btn" data-post-id="${post.id}" aria-label="Copy post content">Copy</button>
                             </div>
+                            <p>${post.content}</p>
+                            ${post.fileURL ? `<a href="${post.fileURL}" target="_blank" class="file-link">View Uploaded File</a>` : ''}
+                            <div class="post-actions">
+                                <button class="like-btn" data-post-id="${post.id}">
+                                    <span class="like-count">${post.likes || 0}</span> Like${post.likes !== 1 ? 's' : ''}
+                                </button>
+                                <button class="comment-btn" data-post-id="${post.id}">Comment</button>
+                            </div>
+                            <div class="comments-section" id="comments-${post.id}">
+                                ${post.comments ? Object.values(post.comments).map(comment => `
+                                    <div class="comment">${comment.text}</div>
+                                `).join('') : ''}
+                            </div>
+                            <form class="comment-form" data-post-id="${post.id}">
+                                <input type="text" placeholder="Add a comment" required>
+                                <button type="submit">Submit</button>
+                            </form>
                         `;
+                        postsDiv.appendChild(postElement);
+
+                        // Add event listeners for the new buttons
+                        const likeBtn = postElement.querySelector('.like-btn');
+                        const commentBtn = postElement.querySelector('.comment-btn');
+                        const copyBtn = postElement.querySelector('.copy-btn');
+                        const commentForm = postElement.querySelector('.comment-form');
+
+                        likeBtn.addEventListener('click', () => handleLike(post.id));
+                        commentBtn.addEventListener('click', () => toggleCommentForm(post.id));
+                        copyBtn.addEventListener('click', () => copyPostContent(post.content));
+                        commentForm.addEventListener('submit', (e) => handleComment(e, post.id));
                     });
                 } else {
                     postsDiv.innerHTML = "<p>No posts available.</p>"; // Show message if no posts
                 }
             }, (error) => {
                 console.error("Error fetching posts:", error);
+            });
+        }
+
+        // Function to handle likes
+        function handleLike(postId) {
+            const postRef = ref(database, `posts/${postId}`);
+            onValue(postRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const post = snapshot.val();
+                    const currentLikes = post.likes || 0;
+                    update(postRef, { likes: currentLikes + 1 }).then(() => {
+                        // Update the like count in the UI
+                        const likeBtn = document.querySelector(`.like-btn[data-post-id="${postId}"]`);
+                        const likeCount = likeBtn.querySelector('.like-count');
+                        const newLikeCount = currentLikes + 1;
+                        likeCount.textContent = newLikeCount;
+                        likeBtn.textContent = `${newLikeCount} Like${newLikeCount !== 1 ? 's' : ''}`;
+                    });
+                }
+            }, { onlyOnce: true });
+        }
+
+        // Function to toggle comment form visibility
+        function toggleCommentForm(postId) {
+            const form = document.querySelector(`.comment-form[data-post-id="${postId}"]`);
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Function to handle comment submission
+        function handleComment(event, postId) {
+            event.preventDefault();
+            const commentInput = event.target.querySelector('input');
+            const commentText = commentInput.value.trim();
+            if (commentText) {
+                const commentRef = ref(database, `posts/${postId}/comments`);
+                const newCommentRef = push(commentRef);
+                set(newCommentRef, {
+                    text: commentText,
+                    timestamp: Date.now()
+                }).then(() => {
+                    // Add the new comment to the UI
+                    const commentsSection = document.getElementById(`comments-${postId}`);
+                    const newCommentElement = document.createElement('div');
+                    newCommentElement.className = 'comment';
+                    newCommentElement.textContent = commentText;
+                    commentsSection.appendChild(newCommentElement);
+
+                    commentInput.value = '';
+                }).catch((error) => {
+                    console.error("Error posting comment:", error);
+                });
+            }
+        }
+
+        // Function to copy post content
+        function copyPostContent(content) {
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Post content copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
             });
         }
 
@@ -60,7 +158,8 @@
                 title: title,
                 content: content,
                 fileURL: fileURL,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                likes: 0
             })
             .then(() => {
                 alert('Post uploaded successfully!'); // Alert on success
@@ -103,54 +202,198 @@
         });
     </script>
     <style>
+        :root {
+            --primary-color: #6c5ce7;
+            --secondary-color: #00cec9;
+            --background-color: #0c0c0c;
+            --text-color: #ecf0f1;
+            --post-bg-color: rgba(255, 255, 255, 0.05);
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
             margin: 0;
             padding: 20px;
+            line-height: 1.6;
         }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
         h1 {
-            color: #333;
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
+
+        #postForm {
+            background-color: var(--post-bg-color);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+        }
+
+        input[type="file"] {
+            margin-bottom: 15px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+        }
+
         .post {
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 15px;
-            margin: 10px 0;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            background-color: var(--post-bg-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
-        h3 {
-            margin: 0 0 5px;
+
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
         }
+
+        .post h3 {
+            color: var(--secondary-color);
+            margin: 0;
+        }
+
+        .file-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .file-link:hover {
+            color: var(--secondary-color);
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: 15px;
+        }
+
+        .post-actions button {
+            margin-right: 10px;
+            padding: 5px 10px;
+            font-size: 0.9em;
+        }
+
+        .copy-btn {
+            padding: 5px 10px;
+            font-size: 0.8em;
+        }
+
+        .comments-section {
+            margin-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 15px;
+        }
+
+        .comment {
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .comment-form {
+            margin-top: 15px;
+            display: flex;
+        }
+
+        .comment-form input {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+
         footer {
             text-align: center;
-            margin-top: 20px;
-            font-size: 14px;
-            color: #666;
+            margin-top: 40px;
+            padding: 20px 0;
+            border-top: 1px solid var(--post-bg-color);
+            font-size: 0.9em;
         }
+
         footer a {
-            color: #0066cc;
+            color: var(--secondary-color);
             text-decoration: none;
+            transition: color 0.3s ease;
         }
+
         footer a:hover {
-            text-decoration: underline;
+            color: var(--primary-color);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .post-actions {
+                flex-wrap: wrap;
+            }
+
+            .post-actions button {
+                margin-bottom: 5px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>SourceHub</h1>
-    <form id="postForm">
-        <input type="text" id="postTitle" placeholder="Post Title" required>
-        <textarea id="postContent" placeholder="Post Content" required></textarea>
-        <input type="file" id="fileInput">
-        <button type="submit">Submit Post</button>
-    </form>
+    <div class="container">
+        <h1>SourceHub</h1>
+        <form id="postForm">
+            <input type="text" id="postTitle" placeholder="Post Title" required>
+            <textarea id="postContent" placeholder="Post Content" required></textarea>
+            <input type="file" id="fileInput">
+            <button type="submit">Submit Post</button>
+        </form>
 
-    <div id="posts"></div>
+        <div id="posts"></div>
 
-    <footer>
-        &copy; 2024 Chitron Bhattacharjee. All rights reserved. | <a href="https://www.brandchitron.github.com/biograph" target="_blank">About Me</a>
-    </footer>
+        <footer>
+            &copy; 2024 Chitron Bhattacharjee. All rights reserved. | <a href="https://adibhaialpha.github.io/portfolio/" target="_blank">About Me</a>
+        </footer>
+    </div>
 </body>
 </html>
