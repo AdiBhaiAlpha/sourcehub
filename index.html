@@ -3,185 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Sharing Platform</title>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        h1 {
-            text-align: center;
-        }
-        #posts {
-            margin-top: 20px;
-        }
-        .post {
-            background: #fff;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 10px;
-            margin: 5px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            padding: 10px 15px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #218838;
-        }
-        /* Popup styles */
-        .popup {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px;
-            border-radius: 5px;
-            display: none;
-            z-index: 1000;
-            color: white;
-        }
-        .popup.success {
-            background-color: #28a745;
-        }
-        .popup.error {
-            background-color: #dc3545;
-        }
-    </style>
-</head>
-<body>
-    <h1>Code Sharing Platform</h1>
-    
-    <h2>Submit Your Post</h2>
-    <form id="postForm">
-        <input type="text" id="postTitle" placeholder="Post Title" required>
-        <textarea id="postContent" placeholder="Write your code here..." required></textarea>
-        <input type="file" id="fileInput" />
-        <button type="submit">Post</button>
-    </form>
+    <title>Firebase Social App</title>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
-    <div id="popup" class="popup"></div>
-
-    <h2>Recent Posts</h2>
-    <div id="posts"></div>
-    
-    <script>
         // Your web app's Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyCBJwk7FC-whp3rD_oa0K3AzCMSKAwl6dU",
-            authDomain: "black-book-65d42.firebaseapp.com",
-            databaseURL: "https://black-book-65d42-default-rtdb.firebaseio.com/",
-            projectId: "black-book-65d42",
-            storageBucket: "black-book-65d42.appspot.com",
-            messagingSenderId: "199295305930",
-            appId: "1:199295305930:android:2702c363510cc799770c33"
+            apiKey: "AIzaSyDDOMfizL6pjT40qisJqI14o5R5IiK27OQ",
+            authDomain: "social-6e0ee.firebaseapp.com",
+            projectId: "social-6e0ee",
+            storageBucket: "social-6e0ee.appspot.com",
+            messagingSenderId: "246903005794",
+            appId: "1:246903005794:web:8951084e46924a5551273b"
         };
 
         // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const storage = firebase.storage();
-        const database = firebase.database();
+        const app = initializeApp(firebaseConfig);
+        
+        // Initialize services
+        const database = getDatabase(app);
+        const storage = getStorage(app);
 
-        document.getElementById('postForm').addEventListener('submit', function (event) {
-            event.preventDefault();
-
-            const title = document.getElementById('postTitle').value;
-            const content = document.getElementById('postContent').value;
-            const fileInput = document.getElementById('fileInput').files[0];
-
-            if (fileInput) {
-                const storageRef = storage.ref('uploads/' + fileInput.name);
-                const uploadTask = storageRef.put(fileInput);
-
-                uploadTask.on('state_changed', 
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        console.log('Upload is ' + progress + '% done');
-                    }, 
-                    (error) => {
-                        showPopup('Post upload failed: ' + error.message, 'error');
-                    }, 
-                    () => {
-                        // Get the download URL after the upload completes
-                        uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
-                            console.log('File available at', downloadURL);
-                            savePost(title, content, downloadURL);
-                        });
-                    }
-                );
-            } else {
-                // If no file is uploaded, just save the post
-                savePost(title, content, null);
-            }
-        });
-
-        function savePost(title, content, fileURL) {
-            const newPostRef = database.ref('posts').push();
-            newPostRef.set({
-                title: title,
-                content: content,
-                fileURL: fileURL,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            }).then(() => {
-                showPopup('Post uploaded successfully!', 'success');
-                displayPosts(); // Refresh posts after adding a new one
-                document.getElementById('postForm').reset(); // Clear the form
-            }).catch((error) => {
-                showPopup('Post upload failed: ' + error.message, 'error');
-            });
-        }
-
+        // Function to display posts
         function displayPosts() {
             const postsDiv = document.getElementById('posts');
             postsDiv.innerHTML = ''; // Clear existing posts
 
-            database.ref('posts').orderByChild('timestamp').once('value', (snapshot) => {
-                console.log('Fetching posts from Firebase...');
-                snapshot.forEach((childSnapshot) => {
-                    const post = childSnapshot.val();
-                    postsDiv.innerHTML += `
-                        <div class="post">
-                            <h3>${post.title}</h3>
-                            <p>${post.content}</p>
-                            ${post.fileURL ? `<a href="${post.fileURL}" target="_blank">View Uploaded File</a>` : ''}
-                        </div>
-                    `;
-                });
-                console.log('Posts fetched:', snapshot.val());
+            const postsRef = ref(database, 'posts');
+            onValue(postsRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        const post = childSnapshot.val();
+                        postsDiv.innerHTML += `
+                            <div class="post">
+                                <h3>${post.title}</h3>
+                                <p>${post.content}</p>
+                                ${post.fileURL ? `<a href="${post.fileURL}" target="_blank">View Uploaded File</a>` : ''}
+                            </div>
+                        `;
+                    });
+                } else {
+                    postsDiv.innerHTML = "<p>No posts available.</p>"; // Show message if no posts
+                }
+            }, (error) => {
+                console.error("Error fetching posts:", error);
             });
         }
 
-        function showPopup(message, type) {
-            const popup = document.getElementById('popup');
-            popup.textContent = message;
-            popup.className = 'popup ' + type; // Add success or error class
-            popup.style.display = 'block';
-
-            // Automatically hide the popup after 3 seconds
-            setTimeout(() => {
-                popup.style.display = 'none';
-            }, 3000);
+        // Function to save post
+        function savePost(title, content, fileURL) {
+            const newPostRef = ref(database, 'posts/' + Date.now()); // Using a timestamp for unique key
+            set(newPostRef, {
+                title: title,
+                content: content,
+                fileURL: fileURL,
+                timestamp: Date.now()
+            })
+            .then(() => {
+                alert('Post uploaded successfully!'); // Alert on success
+                displayPosts(); // Refresh posts after adding a new one
+                document.getElementById('postForm').reset(); // Clear the form
+            })
+            .catch((error) => {
+                console.error("Error saving post:", error);
+                alert('Post upload failed: ' + error.message); // Alert on error
+            });
         }
 
-        displayPosts(); // Initial call to display posts
+        // Form submission handling
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('postForm').addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                const title = document.getElementById('postTitle').value;
+                const content = document.getElementById('postContent').value;
+                const fileInput = document.getElementById('fileInput').files[0];
+
+                if (fileInput) {
+                    const storageReference = storageRef(storage, 'uploads/' + fileInput.name);
+                    uploadBytes(storageReference, fileInput).then((snapshot) => {
+                        console.log('Uploaded a blob or file!', snapshot);
+                        getDownloadURL(storageReference).then((downloadURL) => {
+                            savePost(title, content, downloadURL);
+                        });
+                    }).catch((error) => {
+                        console.error("Upload failed:", error);
+                        alert('File upload failed: ' + error.message); // Alert on file upload error
+                    });
+                } else {
+                    savePost(title, content, null);
+                }
+            });
+
+            // Initial call to display posts
+            displayPosts();
+        });
     </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .post {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        h3 {
+            margin: 0 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Firebase Social App</h1>
+    <form id="postForm">
+        <input type="text" id="postTitle" placeholder="Post Title" required>
+        <textarea id="postContent" placeholder="Post Content" required></textarea>
+        <input type="file" id="fileInput">
+        <button type="submit">Submit Post</button>
+    </form>
+
+    <div id="posts"></div>
 </body>
 </html>
