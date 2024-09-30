@@ -3,26 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Code Snippet</title>
+    <title>Code Sharing Platform</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            text-align: center;
+        }
+        #posts {
+            margin-bottom: 20px;
+        }
+        .post {
+            background: #fff;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        form {
+            margin-top: 20px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #218838;
+        }
+    </style>
 </head>
 <body>
-    <h1>Upload Your Code Snippet</h1>
-    <form id="codeForm" method="POST" action="/upload">
-        <label for="title">Title:</label>
-        <input type="text" id="title" name="title" required>
-        
-        <label for="language">Language:</label>
-        <select id="language" name="language">
-            <option value="javascript">JavaScript</option>
-            <option value="python">Python</option>
-            <option value="java">Java</option>
-            <!-- Add more languages as needed -->
-        </select>
-        
-        <label for="code">Code Snippet:</label>
-        <textarea id="code" name="code" rows="10" required></textarea>
-        
-        <button type="submit">Upload</button>
+    <h1>Code Sharing Platform</h1>
+    <div id="posts"></div>
+    <h2>Submit Your Post</h2>
+    <form id="postForm">
+        <input type="text" id="postTitle" placeholder="Post Title" required>
+        <textarea id="postContent" placeholder="Write your code here..." required></textarea>
+        <input type="file" id="fileInput" />
+        <button type="submit">Post</button>
     </form>
+    
+    <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBJwk7FC-whp3rD_oa0K3AzCMSKAwl6dU",
+            authDomain: "black-book-65d42.firebaseapp.com",
+            databaseURL: "https://black-book-65d42-default-rtdb.firebaseio.com/",
+            projectId: "black-book-65d42",
+            storageBucket: "black-book-65d42.appspot.com",
+            messagingSenderId: "199295305930",
+            appId: "1:199295305930:android:2702c363510cc799770c33"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+        const database = firebase.database();
+
+        document.getElementById('postForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const title = document.getElementById('postTitle').value;
+            const content = document.getElementById('postContent').value;
+            const fileInput = document.getElementById('fileInput').files[0];
+
+            if (fileInput) {
+                const storageRef = storage.ref('uploads/' + fileInput.name);
+                const uploadTask = storageRef.put(fileInput);
+
+                uploadTask.on('state_changed', 
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        console.log('Upload is ' + progress + '% done');
+                    }, 
+                    (error) => {
+                        console.error('Upload failed', error);
+                    }, 
+                    () => {
+                        // Get the download URL after the upload completes
+                        uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                            console.log('File available at', downloadURL);
+                            savePost(title, content, downloadURL);
+                        });
+                    }
+                );
+            } else {
+                // If no file is uploaded, just save the post
+                savePost(title, content, null);
+            }
+        });
+
+        function savePost(title, content, fileURL) {
+            const newPostRef = database.ref('posts').push();
+            newPostRef.set({
+                title: title,
+                content: content,
+                fileURL: fileURL,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                displayPosts(); // Refresh posts after adding a new one
+                document.getElementById('postForm').reset(); // Clear the form
+            });
+        }
+
+        function displayPosts() {
+            const postsDiv = document.getElementById('posts');
+            postsDiv.innerHTML = ''; // Clear existing posts
+
+            database.ref('posts').orderByChild('timestamp').once('value', (snapshot) => {
+                snapshot.forEach((childSnapshot) => {
+                    const post = childSnapshot.val();
+                    postsDiv.innerHTML += `
+                        <div class="post">
+                            <h3>${post.title}</h3>
+                            <p>${post.content}</p>
+                            ${post.fileURL ? `<a href="${post.fileURL}" target="_blank">View Uploaded File</a>` : ''}
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        displayPosts(); // Initial call to display posts
+    </script>
 </body>
 </html>
