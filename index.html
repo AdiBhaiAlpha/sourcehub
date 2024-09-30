@@ -18,7 +18,7 @@
             text-align: center;
         }
         #posts {
-            margin-bottom: 20px;
+            margin-top: 20px;
         }
         .post {
             background: #fff;
@@ -28,7 +28,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         form {
-            margin-top: 20px;
+            margin-bottom: 20px;
         }
         input, textarea {
             width: 100%;
@@ -48,11 +48,28 @@
         button:hover {
             background: #218838;
         }
+        /* Popup styles */
+        .popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+            z-index: 1000;
+            color: white;
+        }
+        .popup.success {
+            background-color: #28a745;
+        }
+        .popup.error {
+            background-color: #dc3545;
+        }
     </style>
 </head>
 <body>
     <h1>Code Sharing Platform</h1>
-    <div id="posts"></div>
+    
     <h2>Submit Your Post</h2>
     <form id="postForm">
         <input type="text" id="postTitle" placeholder="Post Title" required>
@@ -60,6 +77,11 @@
         <input type="file" id="fileInput" />
         <button type="submit">Post</button>
     </form>
+
+    <div id="popup" class="popup"></div>
+
+    <h2>Recent Posts</h2>
+    <div id="posts"></div>
     
     <script>
         // Your web app's Firebase configuration
@@ -95,7 +117,7 @@
                         console.log('Upload is ' + progress + '% done');
                     }, 
                     (error) => {
-                        console.error('Upload failed', error);
+                        showPopup('Post upload failed: ' + error.message, 'error');
                     }, 
                     () => {
                         // Get the download URL after the upload completes
@@ -119,8 +141,11 @@
                 fileURL: fileURL,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             }).then(() => {
+                showPopup('Post uploaded successfully!', 'success');
                 displayPosts(); // Refresh posts after adding a new one
                 document.getElementById('postForm').reset(); // Clear the form
+            }).catch((error) => {
+                showPopup('Post upload failed: ' + error.message, 'error');
             });
         }
 
@@ -140,6 +165,18 @@
                     `;
                 });
             });
+        }
+
+        function showPopup(message, type) {
+            const popup = document.getElementById('popup');
+            popup.textContent = message;
+            popup.className = 'popup ' + type; // Add success or error class
+            popup.style.display = 'block';
+
+            // Automatically hide the popup after 3 seconds
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 3000);
         }
 
         displayPosts(); // Initial call to display posts
