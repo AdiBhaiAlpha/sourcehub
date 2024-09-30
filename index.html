@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase Social App</title>
+    <title>SourceHub - Your Gateway to Knowledge Sharing</title>
     <script type="module">
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
@@ -105,19 +105,41 @@
     <style>
         body {
             font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
         }
         .post {
             border: 1px solid #ccc;
-            padding: 10px;
+            border-radius: 5px;
+            padding: 15px;
             margin: 10px 0;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         h3 {
             margin: 0 0 5px;
         }
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        footer a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
-    <h1>Firebase Social App</h1>
+    <h1>SourceHub</h1>
     <form id="postForm">
         <input type="text" id="postTitle" placeholder="Post Title" required>
         <textarea id="postContent" placeholder="Post Content" required></textarea>
@@ -126,5 +148,9 @@
     </form>
 
     <div id="posts"></div>
+
+    <footer>
+        &copy; 2024 Chitron Bhattacharjee. All rights reserved. | <a href="https://www.brandchitron.github.com/biograph" target="_blank">About Me</a>
+    </footer>
 </body>
 </html>
