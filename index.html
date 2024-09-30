@@ -86,8 +86,8 @@
     <script>
         // Your web app's Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyDDOMfizL6pjT40qisJqI14o5R5IiK27OQ",
-            authDomain: "social-6e0ee.firebaseapp.com",
+            apiKey: "AIzaSyCBJwk7FC-whp3rD_oa0K3AzCMSKAwl6dU",
+            authDomain: "black-book-65d42.firebaseapp.com",
             databaseURL: "https://black-book-65d42-default-rtdb.firebaseio.com/",
             projectId: "black-book-65d42",
             storageBucket: "black-book-65d42.appspot.com",
@@ -154,6 +154,7 @@
             postsDiv.innerHTML = ''; // Clear existing posts
 
             database.ref('posts').orderByChild('timestamp').once('value', (snapshot) => {
+                console.log('Fetching posts from Firebase...');
                 snapshot.forEach((childSnapshot) => {
                     const post = childSnapshot.val();
                     postsDiv.innerHTML += `
@@ -164,6 +165,7 @@
                         </div>
                     `;
                 });
+                console.log('Posts fetched:', snapshot.val());
             });
         }
 
