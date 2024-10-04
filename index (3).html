@@ -39,6 +39,7 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+            position: relative; /* Added to position nickname input */
         }
 
         .chat-header {
@@ -112,35 +113,29 @@
             cursor: pointer;
         }
 
-        .reactions {
+        /* Nickname input box styles */
+        .nickname-input {
+            position: absolute;
+            top: 10px;
+            right: 10px;
             display: flex;
-            flex-wrap: wrap;
-            margin-top: 5px;
+            align-items: center;
         }
 
-        .reaction {
-            background-color: rgba(255, 255, 255, 0.7);
-            border-radius: 12px;
-            padding: 2px 5px;
-            margin-right: 5px;
-            margin-bottom: 5px;
-            font-size: 0.9em;
-            cursor: pointer;
-        }
-
-        .reply-to {
-            background-color: rgba(0, 0, 0, 0.05);
-            border-left: 3px solid var(--primary-color);
+        .nickname-input input {
             padding: 5px;
-            margin-bottom: 5px;
-            font-size: 0.9em;
+            border-radius: 5px;
+            border: 1px solid #ccc;
         }
 
-        .loading {
-            text-align: center;
-            padding: 20px;
-            font-style: italic;
-            color: #888;
+        .nickname-input button {
+            margin-left: 5px;
+            padding: 5px 10px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
         }
 
         @media (max-width: 600px) {
@@ -155,6 +150,13 @@
         <div class="chat-header">
             SOURCEBUDDY Group Chat
         </div>
+
+        <!-- Nickname input section -->
+        <div class="nickname-input">
+            <input type="text" id="nickname-input" placeholder="Enter your nickname">
+            <button id="save-nickname-button">Save</button>
+        </div>
+
         <div class="chat-messages" id="chat-messages">
             <div class="loading">Loading messages...</div>
         </div>
@@ -165,9 +167,9 @@
     </div>
 
     <script type="module">
-        // Import the functions you need from the SDKs you need
+        // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, update } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+        import { getDatabase, ref, push, onChildAdded, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -184,124 +186,69 @@
         const database = getDatabase(app);
 
         // DOM elements
+        const nicknameInput = document.getElementById('nickname-input');
+        const saveNicknameButton = document.getElementById('save-nickname-button');
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
 
-        // User information (replace with actual user authentication)
-        const currentUser = {
-            id: 'user_' + Math.random().toString(36).substr(2, 9),
-            name: 'User_' + Math.floor(Math.random() * 1000)
+        let currentUser = {
+            id: localStorage.getItem('user_id') || 'user_' + Math.random().toString(36).substr(2, 9),
+            nickname: localStorage.getItem('nickname') || null
         };
 
-        // Available reactions
-        const availableReactions = ['🤍', '🗿', '🤣', '🌚', '💀', '🤡', '💋', '😾', '🥺'];
+        // Function to save nickname in Firebase and local storage
+        function saveNickname() {
+            const nickname = nicknameInput.value.trim();
+            if (nickname) {
+                currentUser.nickname = nickname;
+                localStorage.setItem('nickname', nickname);
+                localStorage.setItem('user_id', currentUser.id);
+
+                // Save nickname to Firebase
+                const usersRef = ref(database, `users/${currentUser.id}`);
+                set(usersRef, {
+                    nickname: nickname,
+                    userId: currentUser.id
+                });
+
+                alert('Nickname saved: ' + nickname);
+            }
+        }
 
         // Function to send a message
         function sendMessage() {
             const messageText = messageInput.value.trim();
-            if (messageText) {
+            if (messageText && currentUser.nickname) {
                 const messagesRef = ref(database, 'messages');
                 push(messagesRef, {
                     text: messageText,
                     userId: currentUser.id,
-                    userName: currentUser.name,
-                    timestamp: Date.now(),
-                    reactions: {}
+                    nickname: currentUser.nickname,  // Include the nickname
+                    timestamp: Date.now()
                 });
                 messageInput.value = '';
+            } else {
+                alert('Please set your nickname first!');
             }
         }
 
-        // Function to display a message
+        // Display messages in the chat
         function displayMessage(message, id) {
             const messageElement = document.createElement('div');
             messageElement.className = `message ${message.userId === currentUser.id ? 'sent' : 'received'}`;
             messageElement.id = id;
 
-            let replyToHtml = '';
-            if (message.replyTo) {
-                replyToHtml = `
-                    <div class="reply-to">
-                        <strong>${message.replyTo.userName}:</strong> ${message.replyTo.text}
-                    </div>
-                `;
-            }
-
             messageElement.innerHTML = `
-                ${replyToHtml}
                 <div class="message-content">${message.text}</div>
                 <div class="message-info">
-                    <span>${message.userName}</span>
+                    <strong>${message.nickname}</strong> 
                     <span>${new Date(message.timestamp).toLocaleTimeString()}</span>
                 </div>
-                <div class="reactions"></div>
             `;
 
-            // Add reaction functionality
-            const reactionsContainer = messageElement.querySelector('.reactions');
-            availableReactions.forEach(reaction => {
-                const reactionElement = document.createElement('span');
-                reactionElement.className = 'reaction';
-                reactionElement.textContent = reaction;
-                reactionElement.onclick = () => addReaction(id, reaction);
-                reactionsContainer.appendChild(reactionElement);
-            });
-
-            // Add reply functionality
-            messageElement.ondblclick = () => replyToMessage(message);
-
             chatMessages.insertBefore(messageElement, chatMessages.firstChild);
-            updateReactions(id, message.reactions);
         }
-
-        // Function to add a reaction
-        function addReaction(messageId, reaction) {
-            const messageRef = ref(database, `messages/${messageId}/reactions/${currentUser.id}`);
-            update(messageRef, { [reaction]: true });
-        }
-
-        // Function to update reactions display
-        function updateReactions(messageId, reactions) {
-            const messageElement = document.getElementById(messageId);
-            if (messageElement) {
-                const reactionsContainer = messageElement.querySelector('.reactions');
-                reactionsContainer.innerHTML = '';
-                Object.entries(reactions).forEach(([userId, userReactions]) => {
-                    Object.keys(userReactions).forEach(reaction => {
-                        const reactionElement = document.createElement('span');
-                        reactionElement.className = 'reaction';
-                        reactionElement.textContent = reaction;
-                        reactionsContainer.appendChild(reactionElement);
-                    });
-                });
-            }
-        }
-
-        // Function to reply to a message
-        function replyToMessage(originalMessage) {
-            const replyText = prompt("Reply to this message:", "");
-            if (replyText) {
-                const messagesRef = ref(database, 'messages');
-                push(messagesRef, {
-                    text: replyText,
-                    userId: currentUser.id,
-                    userName: currentUser.name,
-                    timestamp: Date.now(),
-                    reactions: {},
-                    replyTo: {
-                        text: originalMessage.text,
-                        userName: originalMessage.userName
-                    }
-                });
-            }
-        }
-
-        // Event listeners
-        sendButton.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
 
         // Listen for new messages
         const messagesRef = ref(database, 'messages');
@@ -310,11 +257,19 @@
             displayMessage(message, snapshot.key);
         });
 
-        // Remove loading message once data starts coming in
-        onChildAdded(messagesRef, () => {
-            const loadingElement = document.querySelector('.loading');
-            if (loadingElement) loadingElement.remove();
-        }, { onlyOnce: true });
+        // Save nickname button click event
+        saveNicknameButton.addEventListener('click', saveNickname);
+
+        // Send message button click event
+        sendButton.addEventListener('click', sendMessage);
+
+        // Load saved nickname if it exists
+        window.addEventListener('load', () => {
+            if (currentUser.nickname) {
+                alert('Welcome back, ' + currentUser.nickname);
+                nicknameInput.value = currentUser.nickname;
+            }
+        });
     </script>
 </body>
 </html>
